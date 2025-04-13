@@ -1,10 +1,9 @@
 import Foundation
 import AVFoundation
-import MediaPlayer
-import SwiftUI
 import Combine
 
 #if os(iOS)
+import MediaPlayer
 import UIKit
 #endif
 
@@ -16,25 +15,29 @@ class AudioManager: NSObject, ObservableObject {
     
     private var player: AVPlayer?
     private var timeObserver: Any?
+    private var timeControlStatusObservation: NSKeyValueObservation?
     private var cancellables = Set<AnyCancellable>()
     
     override init() {
         super.init()
+        #if os(iOS)
         setupAudioSession()
         setupRemoteTransportControls()
+        #endif
     }
     
+    #if os(iOS)
     private func setupAudioSession() {
-        #if os(iOS)
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
             print("Failed to set up audio session: \(error)")
         }
-        #endif
     }
+    #endif
     
+    #if os(iOS)
     private func setupRemoteTransportControls() {
         // Get the shared MPRemoteCommandCenter
         let commandCenter = MPRemoteCommandCenter.shared()
@@ -56,17 +59,20 @@ class AudioManager: NSObject, ObservableObject {
             }
             return .commandFailed
         }
-        
-        #if os(iOS)
-        // Register for audio interruption notifications
+    }
+    #endif
+    
+    #if os(iOS)
+    // Register for audio interruption notifications
+    private func observeInterruptions() {
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleInterruption),
             name: AVAudioSession.interruptionNotification,
             object: AVAudioSession.sharedInstance()
         )
-        #endif
     }
+    #endif
     
     @objc func handleInterruption(notification: Notification) {
         #if os(iOS)
@@ -118,8 +124,10 @@ class AudioManager: NSObject, ObservableObject {
             // Create a new player with the properly configured item
             player = AVPlayer(playerItem: playerItem)
             
+            #if os(iOS)
             // Configure audio for background playback
             configureNowPlayingInfo(for: station)
+            #endif
             
             // Print debugging info about the stream
             print("Attempting to play stream: \(station.streamURL.absoluteString)")
@@ -128,6 +136,24 @@ class AudioManager: NSObject, ObservableObject {
         guard let player = player else { return }
         
         // Play will be called once the stream is actually ready in observeValue
+        
+        // Observe Time Control Status for buffering/playing state
+        timeControlStatusObservation = player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, change in
+            guard let self = self else { return }
+            // Use change.newValue safely
+            guard let newStatus = change.newValue else { return }
+
+            switch newStatus { // Use the unwrapped newStatus
+            case .paused:
+                self.isPlaying = false
+            case .playing:
+                self.isPlaying = true
+            case .waitingToPlayAtSpecifiedRate:
+                self.isPlaying = false
+            @unknown default:
+                break
+            }
+        }
         
         // Observe playback time
         removeTimeObserver()
@@ -146,6 +172,7 @@ class AudioManager: NSObject, ObservableObject {
         
         // Remove observers
         removeTimeObserver()
+        timeControlStatusObservation?.invalidate()
         
         if let playerItem = player.currentItem {
             playerItem.removeObserver(self, forKeyPath: #keyPath(AVPlayerItem.status))
@@ -155,8 +182,10 @@ class AudioManager: NSObject, ObservableObject {
         self.player = nil
         isPlaying = false
         
+        #if os(iOS)
         // Clear now playing info
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        #endif
     }
     
     func pause() {
@@ -164,9 +193,12 @@ class AudioManager: NSObject, ObservableObject {
         
         player.pause()
         isPlaying = false
+        #if os(iOS)
         updateNowPlayingInfoPlaybackRate(rate: 0.0)
+        #endif
     }
     
+    #if os(iOS)
     private func configureNowPlayingInfo(for station: RadioStation) {
         // Define now playing information
         var nowPlayingInfo = [String: Any]()
@@ -177,25 +209,26 @@ class AudioManager: NSObject, ObservableObject {
         nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = 1.0
         
         // Create artwork from system image
-        #if os(iOS)
         if let image = UIImage(systemName: station.imageSystemName)?.withTintColor(.systemBlue, renderingMode: .alwaysOriginal) {
             let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in
                 return image
             }
             nowPlayingInfo[MPMediaItemPropertyArtwork] = artwork
         }
-        #endif
         
         // Set the now playing info
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
     }
+    #endif
     
+    #if os(iOS)
     private func updateNowPlayingInfoPlaybackRate(rate: Float) {
         if var nowPlayingInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo {
             nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = rate
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
         }
     }
+    #endif
     
     private func addTimeObserver() {
         let interval = CMTime(seconds: 1.0, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
@@ -267,7 +300,9 @@ class AudioManager: NSObject, ObservableObject {
                 print("Stream is ready to play")
                 player?.play()
                 isPlaying = true
+                #if os(iOS)
                 updateNowPlayingInfoPlaybackRate(rate: 1.0)
+                #endif
             case .failed:
                 print("Stream failed to load: \(item.error?.localizedDescription ?? "Unknown error")")
                 // Try fallback stream if available

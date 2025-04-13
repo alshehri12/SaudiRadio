@@ -16,7 +16,7 @@ An iOS application that streams Saudi radio stations from the official SBA Radio
 
 - Built with SwiftUI
 - Uses AVPlayer for audio streaming
-- Supports iOS 14.0+
+- Supports iOS 15.0+
 
 ## Radio Stations
 

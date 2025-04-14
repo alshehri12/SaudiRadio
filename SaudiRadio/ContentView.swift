@@ -2,198 +2,319 @@ import SwiftUI
 import AVFoundation
 import Combine
 
+// --- Add Color extension here ---
+// REMOVED: Duplicate definition moved to dedicated file (e.g., AppColor.swift)
+/*
+extension Color {
+	static let saudiGreen = Color(red: 0.11, green: 0.36, blue: 0.21) // Define Saudi Green Color
+}
+*/
+// --- End of Color extension ---
+
 #if os(iOS)
 import UIKit
 #endif
 
 struct ContentView: View {
-    @EnvironmentObject var audioManager: AudioManager
-    @State private var showMiniPlayer = false
-    @Environment(\.colorScheme) var colorScheme
+	@EnvironmentObject var audioManager: AudioManager
+	@Environment(\.colorScheme) var colorScheme
+	@State private var selectedTab: Tab = .saudi
+	@State private var expandedStationId: RadioStation.ID? = nil // NEW: Tracks expanded row
 
-    var body: some View {
-        ZStack(alignment: .bottom) {
-            // Main Content Area
-            VStack(spacing: 0) {
-                // Custom Header
-                Text("Saudi Radio")
-                    .font(.largeTitle.bold())
-                    .padding(.top)
-                    .padding(.bottom, 8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal)
-                
-                // Station List
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(RadioStation.sampleStations) { station in
-                            RadioStationRowView(station: station)
-                                .contentShape(Rectangle()) // Keep tappable area
-                                .onTapGesture {
-                                    audioManager.play(station: station)
-                                    withAnimation { // Animate mini player appearance
-                                        showMiniPlayer = true
-                                    }
-                                }
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.bottom, showMiniPlayer ? 70 : 0) // Add padding to avoid overlap with mini player
-                }
-            }
-            .background(colorScheme == .dark ? Color.black : Color(white: 0.96)) // Use simple adaptive background
-            .edgesIgnoringSafeArea(.bottom) // Allow content to go under mini player slightly
-
-            // Mini Player Overlay
-            if showMiniPlayer, let currentStation = audioManager.currentStation {
-                MiniPlayerView(station: currentStation)
-                    .transition(.move(edge: .bottom).combined(with: .opacity)) // Smoother transition
-                    .zIndex(1) // Ensure mini player is on top
-            }
-        }
-        .accentColor(.saudiGreen) // Apply the custom green accent color globally
+	enum Tab { 
+        case saudi
+        case world
+        case settings
     }
+	var backgroundGradient: LinearGradient { 
+        if colorScheme == .dark {
+            return LinearGradient(gradient: Gradient(colors: [Color.black.opacity(0.95), Color.gray.opacity(0.2)]), startPoint: .top, endPoint: .bottom)
+        } else {
+            return LinearGradient(gradient: Gradient(colors: [Color.white, Color.gray.opacity(0.1)]), startPoint: .top, endPoint: .bottom)
+        }
+     }
+
+	var body: some View {
+		ZStack(alignment: .bottom) {
+			backgroundGradient
+				.ignoresSafeArea()
+
+			TabView(selection: $selectedTab) {
+				// Pass binding to expanded ID
+				SaudiStationsView(expandedStationId: $expandedStationId)
+					.tabItem { Label("Saudi", systemImage: "radio") }
+					.tag(Tab.saudi)
+
+				// Pass simplified padding (or none if placeholders don't need it)
+				WorldStationsView()
+					.tabItem { Label("World", systemImage: "globe.americas.fill") }
+					.tag(Tab.world)
+
+				SettingsView()
+					.tabItem { Label("Settings", systemImage: "gear") }
+					.tag(Tab.settings)
+			}
+			.accentColor(.saudiGreen)
+
+			// REMOVED: MiniPlayerView instance is gone
+		}
+		.environmentObject(audioManager)
+		// REMOVED: .onReceive modifiers for showMiniPlayer are gone
+	}
 }
 
-struct RadioStationRowView: View {
-    let station: RadioStation
-    @EnvironmentObject var audioManager: AudioManager
-    @Environment(\.colorScheme) var colorScheme
+// MARK: - Tab Content Views
 
-    var body: some View {
+struct SaudiStationsView: View {
+	@EnvironmentObject var audioManager: AudioManager
+	@Binding var expandedStationId: RadioStation.ID? // CHANGED: Now binding to ID?
+	// REMOVED: showMiniPlayer binding and bottomPadding property
+
+	var body: some View {
+		NavigationView { 
+			ScrollView {
+				LazyVStack(spacing: 12) {
+					ForEach(RadioStation.sampleStations) { station in
+						// Pass binding down to each row
+						RadioStationRowView(station: station,
+											expandedStationId: $expandedStationId)
+							// REMOVED: Tap gesture from here
+					}
+				}
+				.padding(.horizontal)
+				// Simplified bottom padding - only for TabBar
+				.padding(.bottom, 60) // Adjust as needed
+			}
+			.navigationTitle("Saudi Stations")
+			.navigationBarTitleDisplayMode(.large)
+		}
+		.navigationViewStyle(.stack)
+	}
+}
+
+// Placeholder Views - Remove bottomPadding parameter if no longer needed
+struct WorldStationsView: View {
+	var body: some View {
+		NavigationView {
+			Text("World Radio Stations Coming Soon!")
+				.navigationTitle("World Radio")
+				// REMOVED: Padding
+		}
+		.navigationViewStyle(.stack)
+	}
+}
+
+struct SettingsView: View {
+	var body: some View {
+		NavigationView {
+			Text("App Settings Coming Soon!")
+				.navigationTitle("Settings")
+				// REMOVED: Padding
+		}
+		.navigationViewStyle(.stack)
+	}
+}
+
+
+struct RadioStationRowView: View {
+	@EnvironmentObject var audioManager: AudioManager // Get AudioManager
+	let station: RadioStation
+	@Binding var expandedStationId: RadioStation.ID? // Binding to track expansion state
+	@Environment(\.colorScheme) var colorScheme
+
+	// Gesture state
+	@GestureState private var dragOffset: CGSize = .zero
+	@State private var isDraggingVolume = false // To potentially change UI during drag
+	// Store initial volume when drag starts to calculate delta more reliably
+	@State private var initialVolumeOnDrag: Float? = nil
+
+	// Check if this specific row is the one currently expanded
+	var isExpanded: Bool {
+		station.id == expandedStationId
+	}
+
+	// Check if this station is the one currently playing
+	var isPlaying: Bool {
+		audioManager.currentStation?.id == station.id && audioManager.isPlaying
+	}
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: 0) { // Use VStack for main content + controls
+			// --- Main Row Content ---
       if #available(iOS 15.0, *) {
         HStack(spacing: 15) {
-          // Station Icon
           Image(systemName: station.imageSystemName)
-            .font(.system(size: 28)) // Slightly smaller icon
-            .frame(width: 45, height: 45)
-            .background(Color.saudiGreen.opacity(0.15)) // Use accent color background
-            .clipShape(Circle())
-            .foregroundColor(.saudiGreen) // Explicitly set icon color
+            .font(.title2)
+            .frame(width: 40, height: 40)
+            .foregroundColor(.saudiGreen) // Use the theme color
+            .background(Circle().fill(Color.saudiGreen.opacity(0.1))) // Subtle background
           
-          // Station Name
-          VStack(alignment: .leading, spacing: 4) {
+          VStack(alignment: .leading) {
             Text(station.nameEnglish)
               .font(.headline)
-              .fontWeight(.medium) // Slightly bolder
+              .fontWeight(.medium)
             Text(station.nameArabic)
               .font(.subheadline)
               .foregroundColor(.secondary)
           }
+          .lineLimit(1)
           
-          Spacer()
+          Spacer() // Push content left
           
-          // Now Playing Indicator (if playing this station)
-          if audioManager.isPlaying && audioManager.currentStation?.id == station.id {
-            NowPlayingIndicatorView()
-              .frame(width: 25, height: 25) // Adjusted size
-          }
-          // Play Button (if not playing this station, or paused)
-          else {
-            Button(action: {
-              if audioManager.currentStation?.id == station.id {
-                if !audioManager.isPlaying { audioManager.play() }
-              } else {
-                audioManager.play(station: station)
-              }
-            }) {
-              Image(systemName: "play.circle.fill")
-                .font(.system(size: 30))
-                .foregroundColor(.saudiGreen.opacity(0.8)) // Slightly faded play icon
+          // Optional: Add a subtle chevron or indicator?
+          Image(systemName: "chevron.down")
+            .font(.caption.weight(.bold))
+            .foregroundColor(.secondary.opacity(0.5))
+            .rotationEffect(.degrees(isExpanded ? 180 : 0)) // Rotate chevron when expanded
+          
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal)
+        .background(.regularMaterial) // Use material background
+        // Apply highlight modifier based on PLAYING state, not expanded state
+        .modifier(PlayingStationHighlightModifier(isPlaying: audioManager.currentStation?.id == station.id))
+        .contentShape(Rectangle()) // Make the HStack tappable
+        .onTapGesture { // --- Tap Gesture to Expand/Collapse ---
+          withAnimation(.easeInOut(duration: 0.3)) { // Animate the change
+            if isExpanded {
+              expandedStationId = nil // Collapse if tapped while expanded
+              // Optional: Decide if tapping expanded row should stop playback?
+              // if isPlaying { audioManager.stop() }
+            } else {
+              expandedStationId = station.id // Expand this row
+              // Optional: Start playing immediately on expand? Or wait for button press?
+              // audioManager.play(station: station)
             }
           }
         }
-        .padding(12) // Padding inside the card
-        .background(.regularMaterial) // Frosted glass effect
-        .cornerRadius(10) // Rounded corners for card look
-        .shadow(color: colorScheme == .dark ? .white.opacity(0.05) : .black.opacity(0.08), radius: 5, x: 0, y: 2)
       } else {
         // Fallback on earlier versions
-      } // Subtle shadow
+      }
+
+			// --- Expanded Controls Area (Conditional) ---
+			if isExpanded {
+				VStack(spacing: 8) { // Use VStack to place progress bar below button, added spacing
+					HStack {
+						Spacer() // Push controls to the right or center as desired
+
+						// Play/Pause Button
+						Button {
+							if isPlaying {
+								audioManager.pause()
+							} else {
+								// If it's expanded but not playing, or playing a different station
+								audioManager.play(station: station)
+							}
+						} label: {
+							Image(systemName: isPlaying ? "pause.circle.fill" : "play.circle.fill")
+								.font(.system(size: 35)) // Larger control button
+								.foregroundColor(.saudiGreen)
+						}
+						.buttonStyle(.plain) // Use plain style to avoid default button background/borders
+
+						Spacer()
+					}
+
+					// --- Volume Control Area ---
+					HStack(spacing: 8) { // Added spacing
+						 Image(systemName: "speaker.fill")
+							.foregroundColor(.secondary)
+						 // Visual feedback for volume
+						 ProgressView(value: audioManager.volume)
+							.progressViewStyle(LinearProgressViewStyle(tint: .saudiGreen))
+                            // Give it a bit more vertical space if needed
+                            .padding(.vertical, 4)
+                            // Add slight scale effect when dragging for feedback
+                            .scaleEffect(isDraggingVolume ? 1.05 : 1.0)
+                            .animation(.easeInOut(duration: 0.1), value: isDraggingVolume)
+
+						 Image(systemName: "speaker.wave.3.fill")
+							 .foregroundColor(.secondary)
+					}
+					.font(.caption)
+					.padding(.horizontal, 20)
+					 // --- Add Drag Gesture Here ---
+                    .contentShape(Rectangle()) // Make the whole HStack draggable area
+					.gesture(DragGesture(minimumDistance: 5, coordinateSpace: .local)
+						.updating($dragOffset) { value, state, _ in
+							 state = value.translation
+						}
+						.onChanged { value in
+							 // Store initial volume only on the first change event of a drag
+                            if !isDraggingVolume {
+                                isDraggingVolume = true
+                                initialVolumeOnDrag = audioManager.volume
+                            }
+
+                            // Use the stored initial volume for calculation
+                            guard let startVolume = initialVolumeOnDrag else { return }
+
+							let sensitivity: CGFloat = 200
+							let deltaVolume = Float(value.translation.width / sensitivity)
+							let targetVolume = startVolume + deltaVolume
+
+							audioManager.setVolume(targetVolume)
+						}
+						 .onEnded { _ in
+							 // Reset drag state
+                            isDraggingVolume = false
+                            initialVolumeOnDrag = nil
+						}
+					) // End Gesture
+
+				} // End Controls VStack
+				.padding(.vertical, 10) // Increased padding
+				.padding(.horizontal)
+				.background(Color.secondary.opacity(0.1))
+				.transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .top)))
+			} // End if isExpanded
+		} // End Main VStack
+		.clipShape(RoundedRectangle(cornerRadius: 12)) // Clip the whole VStack
+		.overlay( // Add subtle border
+			RoundedRectangle(cornerRadius: 12)
+				.stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+		)
+		// Apply overall animation to the row for changes like highlight
+		.animation(.easeInOut, value: audioManager.currentStation?.id)
+	}
+}
+
+// Helper for rounding specific corners (useful for MiniPlayer)
+struct RoundedCorner: Shape {
+    var radius: CGFloat = .infinity
+    var corners: UIRectCorner = .allCorners
+
+    func path(in rect: CGRect) -> Path {
+        let path = UIBezierPath(roundedRect: rect, byRoundingCorners: corners, cornerRadii: CGSize(width: radius, height: radius))
+        return Path(path.cgPath)
     }
 }
 
+struct PlayingStationHighlightModifier: ViewModifier {
+	let isPlaying: Bool
+	@Environment(\.colorScheme) var colorScheme // Access colorScheme for shadow
 
-struct MiniPlayerView: View {
-    let station: RadioStation
-    @EnvironmentObject var audioManager: AudioManager
-    
-    var body: some View {
-        VStack(spacing: 0) {
-             // Divider removed for cleaner look with material background
-            
-          if #available(iOS 15.0, *) {
-            HStack(spacing: 15) {
-              // Station Icon
-              Image(systemName: station.imageSystemName)
-                .font(.system(size: 22))
-                .foregroundColor(.saudiGreen) // Explicit foreground color
-                .frame(width: 35, height: 35)
-              
-              // Station Info
-              VStack(alignment: .leading, spacing: 2) {
-                Text(station.nameEnglish)
-                  .font(.callout) // Slightly smaller font
-                  .fontWeight(.semibold)
-                  .lineLimit(1)
-                Text(station.nameArabic)
-                  .font(.caption2) // Smaller caption
-                  .foregroundColor(.secondary)
-                  .lineLimit(1)
-              }
-              .frame(maxWidth: .infinity, alignment: .leading)
-              
-              // Play/Pause Button
-              Button(action: {
-                if audioManager.isPlaying {
-                  audioManager.pause()
-                } else {
-                  audioManager.play() // Resume current station
-                }
-              }) {
-                Image(systemName: audioManager.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                  .font(.system(size: 38)) // Slightly larger button
-                  .foregroundColor(.saudiGreen) // Explicit foreground color
-              }
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 10) // Adjusted vertical padding
-            .frame(height: 65) // Increased height slightly
-            .background(.thinMaterial)
-          } else {
-            // Fallback on earlier versions
-          } // Use thin material background
-            // Add a subtle top border if needed
-            // .overlay(Divider().padding(.horizontal, -16), alignment: .top)
-        }
+	func body(content: Content) -> some View {
+    if #available(iOS 15.0, *) {
+      content
+        .background(.regularMaterial) // Base background
+        .overlay( // Conditional overlay
+          RoundedRectangle(cornerRadius: 10)
+            .fill(Color.saudiGreen.opacity(isPlaying ? 0.1 : 0))
+        )
+        .cornerRadius(10) // Apply corner radius after background and overlay
+        .shadow(color: colorScheme == .dark ? .white.opacity(0.05) : .black.opacity(0.08), radius: 5, x: 0, y: 2)
+    } else {
+      // Fallback on earlier versions
     }
+			// Animation is applied where the modifier is used, triggered by the value change
+	}
 }
 
-struct NowPlayingIndicatorView: View {
-    @State private var isAnimating = false
-    
-    var body: some View {
-        HStack(spacing: 2) { // Reduced spacing
-            ForEach(0..<3) { i in
-                RoundedRectangle(cornerRadius: 1.5) // Slightly rounder
-                    .frame(width: 3, height: 6 + CGFloat(isAnimating ? (i == 1 ? 12 : 8) : 0)) // Varied animation height
-                    .animation(
-                        Animation.easeInOut(duration: 0.4) // Faster animation
-                            .repeatForever(autoreverses: true) // Add autoreverse
-                            .delay(Double(i) * 0.15), // Adjust delay
-                        value: isAnimating
-                    )
-            }
-        }
-        .frame(width: 20, height: 20) // Ensure consistent frame
-        .onAppear {
-             // Add a small delay before starting animation to avoid stutter on appear
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                isAnimating = true
-            }
-        }
-        .foregroundColor(.saudiGreen) // Explicit foreground color
-    }
+extension View {
+	func playingHighlight(isPlaying: Bool) -> some View {
+		self.modifier(PlayingStationHighlightModifier(isPlaying: isPlaying))
+	}
 }
 
 struct ContentView_Previews: PreviewProvider {

@@ -12,6 +12,11 @@ class AudioManager: NSObject, ObservableObject {
     @Published var isPlaying = false
     @Published var currentStation: RadioStation?
     @Published var currentTime: Double = 0
+    @Published var volume: Float = 0.5 { // Add published volume property (default 50%)
+        didSet {
+            player?.volume = volume // Update player volume when this changes
+        }
+    }
     
     private var player: AVPlayer?
     private var timeObserver: Any?
@@ -123,6 +128,7 @@ class AudioManager: NSObject, ObservableObject {
             
             // Create a new player with the properly configured item
             player = AVPlayer(playerItem: playerItem)
+            player?.volume = volume // Ensure new player gets current volume
             
             #if os(iOS)
             // Configure audio for background playback
@@ -313,6 +319,18 @@ class AudioManager: NSObject, ObservableObject {
                 print("Stream status is an unknown case")
             }
         }
+    }
+    
+    // --- NEW Method to set volume ---
+    func setVolume(_ newVolume: Float) {
+        // Clamp volume between 0.0 and 1.0
+        let clampedVolume = max(0.0, min(1.0, newVolume))
+        // Only update if the value is actually different to avoid unnecessary UI updates
+        if self.volume != clampedVolume {
+            self.volume = clampedVolume // Update the published property
+        }
+        // The didSet on the volume property will update the player
+        // Print statement removed from here, can be added to didSet or player update if needed
     }
     
     deinit {

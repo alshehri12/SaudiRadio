@@ -24,11 +24,6 @@ struct RadioStation: Identifiable {
                      nameArabic: "إذاعة مكة المكرمة", 
                      streamURL: URL(string: "https://stream.radiojar.com/0tpy1h0kxtzuv")!, 
                      imageSystemName: "book"),
-        RadioStation(id: 5, 
-                     nameEnglish: "BBC World Service", 
-                     nameArabic: "بي بي سي العالمية", 
-                     streamURL: URL(string: "https://stream.live.vc.bbcmedia.co.uk/bbc_world_service")!, 
-                     imageSystemName: "globe"),
         RadioStation(id: 6, 
                      nameEnglish: "Riyadh Radio", 
                      nameArabic: "إذاعة الرياض", 
@@ -39,10 +34,6 @@ struct RadioStation: Identifiable {
                      nameArabic: "إذاعة جدة", 
                      streamURL: URL(string: "https://live.kwikmotion.com/sbrksajeddahradiolive/srpksajeddahradio/playlist.m3u8")!, 
                      imageSystemName: "figure.wave"),
-        RadioStation(id: 9, 
-                     nameEnglish: "Al Jazeera English", 
-                     nameArabic: "الجزيرة الإنجليزية", 
-                     streamURL: URL(string: "https://live-hls-audio-web-aje.getaj.net/VOICE-AJE/index.m3u8")!, 
-                     imageSystemName: "newspaper")
+        
     ]
 }

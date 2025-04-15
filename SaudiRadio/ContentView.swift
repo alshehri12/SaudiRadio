@@ -40,12 +40,10 @@ struct ContentView: View {
 				.ignoresSafeArea()
 
 			TabView(selection: $selectedTab) {
-				// Pass binding to expanded ID
 				SaudiStationsView(expandedStationId: $expandedStationId)
 					.tabItem { Label("Saudi", systemImage: "radio") }
 					.tag(Tab.saudi)
 
-				// Pass simplified padding (or none if placeholders don't need it)
 				WorldStationsView()
 					.tabItem { Label("World", systemImage: "globe.americas.fill") }
 					.tag(Tab.world)
@@ -177,42 +175,85 @@ struct RadioStationRowView: View {
 }
 
 struct WorldStationsView: View {
-	var body: some View {
-		NavigationView {
-			Text("World Radio Stations Coming Soon!")
-				.navigationTitle("World Radio")
-				// REMOVED: Padding
-		}
-		.navigationViewStyle(.stack)
-	}
+    @EnvironmentObject var audioManager: AudioManager
+    @State private var expandedStationId: RadioStation.ID? = nil
+    
+    let usStations = [
+        RadioStation(id: 8,
+                   nameEnglish: "NPR",
+                   nameArabic: "راديو NPR",
+                   streamURL: URL(string: "https://npr-ice.streamguys1.com/live.mp3") ?? URL(string: "about:blank")!,
+                   imageSystemName: "newspaper.fill"),
+        RadioStation(id: 9,
+                   nameEnglish: "Minnesota Public Radio",
+                   nameArabic: "راديو مينيسوتا",
+                   streamURL: URL(string: "https://nis.stream.publicradio.org/nis.mp3") ?? URL(string: "about:blank")!,
+                   imageSystemName: "music.note"),
+        RadioStation(id: 10,
+                   nameEnglish: " public radio",
+                   nameArabic: "راديو العام",
+                   streamURL: URL(string: "https://npr-ice.streamguys1.com/live.mp3") ?? URL(string: "about:blank")!,
+                   imageSystemName: "music.quarternote.3"),
+        RadioStation(id: 5,
+                     nameEnglish: "BBC World Service",
+                     nameArabic: "بي بي سي العالمية",
+                     streamURL: URL(string: "https://stream.live.vc.bbcmedia.co.uk/bbc_world_service")!,
+                     imageSystemName: "globe"),
+        RadioStation(id: 15,
+                     nameEnglish: "Al Jazeera English",
+                     nameArabic: "الجزيرة الإنجليزية",
+                     streamURL: URL(string: "https://live-hls-audio-web-aje.getaj.net/VOICE-AJE/index.m3u8")!,
+                     imageSystemName: "newspaper"),
+        RadioStation(id: 11,
+                    nameEnglish: "Cadena SER",
+                    nameArabic: "كادينا سير",
+                    streamURL: URL(string: "https://playerservices.streamtheworld.com/api/livestream-redirect/CADENASER.mp3") ?? URL(string: "about:blank")!,
+                    imageSystemName: "antenna.radiowaves.left.and.right"),
+
+    ]
+    
+    var body: some View {
+        NavigationView {
+            List {
+                Section(header: Text("United States")) {
+                    ForEach(usStations) { station in
+                        RadioStationRowView(station: station, 
+                                          expandedStationId: $expandedStationId)
+                    }
+                }
+            }
+            .listStyle(.plain)
+            .navigationTitle("World Stations")
+        }
+    }
 }
 
 struct SettingsView: View {
-	@AppStorage("colorScheme") private var selectedColorScheme: UIUserInterfaceStyle = .unspecified
-
-	var body: some View {
-		NavigationView {
-			Form {
-				Section(header: Text("Appearance")) {
-					Picker("Theme", selection: $selectedColorScheme) {
-						Text("System").tag(UIUserInterfaceStyle.unspecified)
-						Text("Light").tag(UIUserInterfaceStyle.light)
-						Text("Dark").tag(UIUserInterfaceStyle.dark)
-					}
-					.pickerStyle(.segmented)
-				}
-			}
-			.navigationTitle("Settings")
-		}
-		.navigationViewStyle(.stack)
-		.preferredColorScheme({
-			switch selectedColorScheme {
-			case .light: return .light
-			case .dark: return .dark
-			default: return nil
-			}
-		}())
-	}
+  @AppStorage("colorScheme") private var selectedColorScheme: UIUserInterfaceStyle = .unspecified
+  
+  var body: some View {
+    NavigationView {
+      Form {
+        Section(header: Text("Appearance")) {
+          Picker("Theme", selection: $selectedColorScheme) {
+            Text("System").tag(UIUserInterfaceStyle.unspecified)
+            Text("Light").tag(UIUserInterfaceStyle.light)
+            Text("Dark").tag(UIUserInterfaceStyle.dark)
+          }
+          .pickerStyle(.segmented)
+        }
+      }
+      .navigationTitle("Settings")
+    }
+    .navigationViewStyle(.stack)
+    .preferredColorScheme({
+      switch selectedColorScheme {
+      case .light: return .light
+      case .dark: return .dark
+      default: return nil
+      }
+    }())
+  }
+  
+  // ... Rest of the code remains the same ...
 }
-
-// ... Rest of the code remains the same ...

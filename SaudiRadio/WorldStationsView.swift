@@ -10,15 +10,26 @@ struct WorldStationsView: View {
     // but for sections, we'll use the static arrays directly.
     // let allWorldStations = RadioStation.usStations + RadioStation.spainStations + RadioStation.franceStations
 
+    let usStations = [
+        RadioStation(nameEnglish: "NPR", 
+                   streamURL: URL(string: "https://npr-ice.streamguys1.com/live.mp3") ?? URL(string: "about:blank")!,
+                   imageSystemName: "newspaper.fill"),
+        RadioStation(nameEnglish: "BBC World Service", 
+                   streamURL: URL(string: "http://bbcwssc.ic.llnwd.net/stream/bbcwssc_mp1_ws-eieuk") ?? URL(string: "about:blank")!,
+                   imageSystemName: "globe.americas.fill"),
+        RadioStation(nameEnglish: "CNN Radio", 
+                   streamURL: URL(string: "http://tunein.streamguys1.com/cnnfree") ?? URL(string: "about:blank")!,
+                   imageSystemName: "play.tv.fill")
+    ]
+
     var body: some View {
         NavigationView {
             List {
                 // --- US Section ---
-                Section(header: Text("🇺🇸 United States").font(.title2).fontWeight(.bold)) {
-                    ForEach(RadioStation.usStations) { station in
-                        RadioStationRowView(station: station, expandedStationId: $expandedStationId)
-                            // Pass environment object down if RadioStationRowView needs it directly
-                            // .environmentObject(audioManager) // Already available via environment
+                Section(header: Text("United States")) {
+                    ForEach(usStations) { station in
+                        RadioStationRowView(station: station, 
+                                          expandedStationId: $expandedStationId)
                     }
                 }
 
